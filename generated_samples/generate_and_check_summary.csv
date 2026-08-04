@@ -1,0 +1,81 @@
+requested_class_index,requested_label,sample_id,predicted_class_index,predicted_label,confidence,passed_quality_check
+0,T-shirt/top,1,3,Dress,0.882526,False
+0,T-shirt/top,2,0,T-shirt/top,0.998387,True
+0,T-shirt/top,3,0,T-shirt/top,0.998239,True
+0,T-shirt/top,4,0,T-shirt/top,0.999339,True
+0,T-shirt/top,5,0,T-shirt/top,0.998024,True
+0,T-shirt/top,6,0,T-shirt/top,0.999604,True
+0,T-shirt/top,7,0,T-shirt/top,0.986056,True
+0,T-shirt/top,8,0,T-shirt/top,0.907102,True
+1,Trouser,1,1,Trouser,1.000000,True
+1,Trouser,2,1,Trouser,1.000000,True
+1,Trouser,3,1,Trouser,0.999495,True
+1,Trouser,4,1,Trouser,0.999979,True
+1,Trouser,5,1,Trouser,0.999996,True
+1,Trouser,6,1,Trouser,0.999992,True
+1,Trouser,7,1,Trouser,0.999999,True
+1,Trouser,8,1,Trouser,0.999979,True
+2,Pullover,1,6,Shirt,0.529966,False
+2,Pullover,2,2,Pullover,0.855453,True
+2,Pullover,3,2,Pullover,0.991995,True
+2,Pullover,4,2,Pullover,0.917248,True
+2,Pullover,5,2,Pullover,0.995981,True
+2,Pullover,6,2,Pullover,0.976921,True
+2,Pullover,7,2,Pullover,0.913439,True
+2,Pullover,8,2,Pullover,0.985923,True
+3,Dress,1,3,Dress,0.572928,True
+3,Dress,2,3,Dress,0.982573,True
+3,Dress,3,3,Dress,0.959540,True
+3,Dress,4,3,Dress,0.997099,True
+3,Dress,5,3,Dress,0.843752,True
+3,Dress,6,3,Dress,0.991482,True
+3,Dress,7,3,Dress,0.998921,True
+3,Dress,8,3,Dress,0.920984,True
+4,Coat,1,2,Pullover,0.484233,False
+4,Coat,2,2,Pullover,0.793239,False
+4,Coat,3,4,Coat,0.896586,True
+4,Coat,4,4,Coat,0.643559,True
+4,Coat,5,4,Coat,0.960620,True
+4,Coat,6,2,Pullover,0.618557,False
+4,Coat,7,4,Coat,0.728691,True
+4,Coat,8,4,Coat,0.876811,True
+5,Sandal,1,5,Sandal,0.999992,True
+5,Sandal,2,5,Sandal,0.997660,True
+5,Sandal,3,5,Sandal,0.997170,True
+5,Sandal,4,9,Ankle boot,0.460375,False
+5,Sandal,5,5,Sandal,0.604818,True
+5,Sandal,6,5,Sandal,0.992362,True
+5,Sandal,7,5,Sandal,0.998939,True
+5,Sandal,8,7,Sneaker,0.494619,False
+6,Shirt,1,0,T-shirt/top,0.941536,False
+6,Shirt,2,6,Shirt,0.937252,True
+6,Shirt,3,0,T-shirt/top,0.224952,False
+6,Shirt,4,2,Pullover,0.379528,False
+6,Shirt,5,6,Shirt,0.603372,True
+6,Shirt,6,0,T-shirt/top,0.533927,False
+6,Shirt,7,6,Shirt,0.469883,True
+6,Shirt,8,2,Pullover,0.436051,False
+7,Sneaker,1,7,Sneaker,0.996593,True
+7,Sneaker,2,7,Sneaker,0.975329,True
+7,Sneaker,3,7,Sneaker,0.998637,True
+7,Sneaker,4,9,Ankle boot,0.800042,False
+7,Sneaker,5,7,Sneaker,0.924635,True
+7,Sneaker,6,7,Sneaker,0.999767,True
+7,Sneaker,7,7,Sneaker,0.999796,True
+7,Sneaker,8,9,Ankle boot,0.500438,False
+8,Bag,1,8,Bag,0.970938,True
+8,Bag,2,8,Bag,0.996871,True
+8,Bag,3,8,Bag,0.999399,True
+8,Bag,4,8,Bag,0.998363,True
+8,Bag,5,8,Bag,0.935036,True
+8,Bag,6,8,Bag,0.995169,True
+8,Bag,7,8,Bag,0.907860,True
+8,Bag,8,8,Bag,0.998462,True
+9,Ankle boot,1,9,Ankle boot,0.999980,True
+9,Ankle boot,2,9,Ankle boot,0.999822,True
+9,Ankle boot,3,9,Ankle boot,1.000000,True
+9,Ankle boot,4,9,Ankle boot,0.999910,True
+9,Ankle boot,5,9,Ankle boot,0.999955,True
+9,Ankle boot,6,9,Ankle boot,0.989624,True
+9,Ankle boot,7,9,Ankle boot,0.999999,True
+9,Ankle boot,8,9,Ankle boot,0.999957,True

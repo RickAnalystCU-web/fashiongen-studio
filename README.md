@@ -105,6 +105,28 @@ Generates images with the CVAE and immediately classifies each normalized tensor
 }
 ```
 
+## Report and presentation outputs
+
+After both trained checkpoints are available locally, generate the final evaluation artifacts with:
+
+```bash
+uv run python generate_project_outputs.py
+```
+
+The default run uses seed 42 and generates eight samples for each of the ten Fashion-MNIST classes. It creates:
+
+- `generated_samples/cvae_all_classes_grid.png` — a labeled ten-row image grid with green classifier-agreement borders and red mismatch borders.
+- `generated_samples/generate_and_check_summary.csv` — one requested-versus-predicted classifier result per generated image.
+- `generated_samples/evaluation_summary.md` — overall and per-class pass rates, confidence, checkpoint metrics, and a short interpretation.
+
+Use the PNG as a qualitative results figure in the report or presentation. Use the CSV for reproducible quantitative analysis, and adapt the Markdown interpretation and summary metrics for the evaluation section and results slides. The generated artifacts remain ignored by Git by default; copy selected final figures into the report or slides workflow only when the group decides how they should be published.
+
+To generate more than eight samples per class or use CPU explicitly:
+
+```bash
+uv run python generate_project_outputs.py --num-images-per-class 12 --device cpu
+```
+
 ## Local development
 Python 3.11 or newer and [uv](https://docs.astral.sh/uv/) are recommended.
 
