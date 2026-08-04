@@ -34,6 +34,20 @@ uv run python train_fashion_classifier.py --epochs 1
 
 The default checkpoint is written to `checkpoints/fashion_classifier.pth`. It contains the model state, class names, test metrics, training arguments, and training history. Checkpoints and downloaded Fashion-MNIST data are ignored by Git and should not be committed.
 
+## Conditional VAE generator
+
+The Conditional VAE (CVAE) learns a class-conditioned latent representation of normalized Fashion-MNIST images. A requested class label is embedded and supplied to both the convolutional encoder and transposed-convolution decoder. The decoder uses a `Tanh` output so generated pixels match the training range of approximately [-1, 1]. Training minimizes per-image reconstruction loss plus beta-weighted KL divergence.
+
+Train the default model with a 32-dimensional latent space and beta of 1.0:
+
+```bash
+uv run python train_fashion_cvae.py
+```
+
+Training options include `--epochs`, `--batch-size`, `--lr`, `--latent-dim`, and `--beta`. The default checkpoint is written to `checkpoints/fashion_cvae.pth` and remains ignored by Git.
+
+Standalone helpers in `helper_lib/fashion_generator.py` can load the checkpoint, sample requested classes, and encode generated grayscale images as base64 PNGs. These helpers will later support a FastAPI fashion-generation endpoint; no generation endpoint is implemented yet.
+
 ## API endpoints
 
 Available in the scaffold:
