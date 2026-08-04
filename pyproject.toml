@@ -1,4 +1,4 @@
-﻿[project]
+[project]
 name = "fashiongen-studio"
 version = "0.1.0"
 description = "Conditional VAE Fashion-MNIST generation with CNN quality checking"
@@ -7,11 +7,14 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi[standard]>=0.110,<1.0",
     "pillow>=10,<13",
-    "torch>=2.2,<3",
-    "torchvision>=0.17,<1",
+    "torch==2.11.0+cu128",
+    "torchvision==0.26.0+cu128",
     "tqdm>=4.66,<5",
     "uvicorn[standard]>=0.27,<1",
 ]
 
 [tool.uv]
 package = false
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cu128"
