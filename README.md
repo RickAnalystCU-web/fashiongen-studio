@@ -84,6 +84,21 @@ Generates 1 to 16 class-conditioned images and returns base64-encoded PNG string
 }
 ```
 
+### `POST /fashion/interpolate`
+
+Explores the CVAE latent space by sampling two seeded latent anchors and decoding evenly spaced points along the straight path between them. The start class conditions the first half of the sequence and the end class conditions the second half.
+
+```json
+{
+  "start_label": "sneaker",
+  "end_label": "ankle boot",
+  "steps": 8,
+  "seed": 42
+}
+```
+
+The response includes interpolation coefficients, the discrete label schedule, and base64-encoded PNG images. The continuous image changes demonstrate structure in the learned latent representation; the midpoint can change more sharply because class labels are discrete embeddings.
+
 ### `POST /fashion/analyze`
 
 Accepts an uploaded image as multipart form data. The service converts it to grayscale, resizes it to 28 x 28, applies Fashion-MNIST normalization, and returns the CNN prediction, confidence, and top-three classes.
@@ -126,6 +141,19 @@ To generate more than eight samples per class or use CPU explicitly:
 ```bash
 uv run python generate_project_outputs.py --num-images-per-class 12 --device cpu
 ```
+
+Generate the slide-ready latent interpolation grid and explanation with:
+
+```bash
+uv run python generate_interpolation_outputs.py
+```
+
+This creates:
+
+- `generated_samples/cvae_interpolation_grid.png` — Sneaker to Ankle boot, T-shirt/top to Pullover, and Bag to Sneaker interpolation rows.
+- `generated_samples/interpolation_summary.md` — a short explanation of continuous latent movement and the midpoint discrete-label switch.
+
+Use these artifacts to demonstrate that the CVAE learned a structured latent space and to discuss the limitation that class conditioning itself is not continuously interpolated.
 
 ## Local development
 Python 3.11 or newer and [uv](https://docs.astral.sh/uv/) are recommended.

@@ -272,3 +272,146 @@ def generate_fashion_images(
             generated_tensor_to_base64_png(image) for image in images
         ],
     }
+
+def interpolate_latent_vectors(
+    start_latent: torch.Tensor,
+    end_latent: torch.Tensor,
+    steps: int = 8,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Linearly interpolate between two one-dimensional latent vectors."""
+
+    if steps < 2:
+        raise ValueError("steps must be at least 2.")
+    if start_latent.ndim != 1 or end_latent.ndim != 1:
+        raise ValueError("start_latent and end_latent must be one-dimensional.")
+    if start_latent.shape != end_latent.shape:
+        raise ValueError("start_latent and end_latent must have matching shapes.")
+
+    alphas = torch.linspace(
+        0.0,
+        1.0,
+        steps,
+        device=start_latent.device,
+        dtype=start_latent.dtype,
+    )
+    interpolation = (
+        (1.0 - alphas).unsqueeze(1) * start_latent.unsqueeze(0)
+        + alphas.unsqueeze(1) * end_latent.unsqueeze(0)
+    )
+    return interpolation, alphas
+
+
+def sample_fashion_latent_interpolation(
+    model: ConditionalVAE,
+    start_label: int,
+    end_label: int,
+    steps: int = 8,
+    device: torch.device | str | None = None,
+    seed: int | None = 42,
+) -> tuple[torch.Tensor, list[int], torch.Tensor]:
+    """Decode a seeded linear latent path with a midpoint label switch.
+
+    The start class conditions the first half of the path and the end class
+    conditions the second half. Returned images and interpolation coefficients
+    are moved to CPU for API serialization and artifact generation.
+    """
+
+    if steps < 2:
+        raise ValueError("steps must be at least 2.")
+    if not 0 <= start_label < model.num_classes:
+        raise ValueError(
+            f"start_label must be between 0 and {model.num_classes - 1}."
+        )
+    if not 0 <= end_label < model.num_classes:
+        raise ValueError(
+            f"end_label must be between 0 and {model.num_classes - 1}."
+        )
+
+    resolved_device = torch.device(device) if device is not None else next(
+        model.parameters()
+    ).device
+    random_generator = None
+    if seed is not None:
+        random_generator = torch.Generator(device=resolved_device).manual_seed(seed)
+    latent_anchors = torch.randn(
+        2,
+        model.latent_dim,
+        device=resolved_device,
+        generator=random_generator,
+    )
+    latent_path, alphas = interpolate_latent_vectors(
+        latent_anchors[0],
+        latent_anchors[1],
+        steps=steps,
+    )
+
+    split_point = (steps + 1) // 2
+    label_schedule = [start_label] * split_point + [end_label] * (
+        steps - split_point
+    )
+    labels = torch.tensor(
+        label_schedule,
+        dtype=torch.long,
+        device=resolved_device,
+    )
+
+    model.to(resolved_device)
+    model.eval()
+    with torch.no_grad():
+        generated = model.decode(latent_path, labels)
+    return generated.detach().cpu(), label_schedule, alphas.detach().cpu()
+
+
+def interpolation_tensors_to_base64(images: torch.Tensor) -> list[str]:
+    """Encode a batch of normalized interpolation images as base64 PNGs."""
+
+    if images.ndim != 4 or tuple(images.shape[1:]) != (1, 28, 28):
+        raise ValueError(
+            "images must have shape [steps, 1, 28, 28], "
+            f"got {tuple(images.shape)}."
+        )
+    return [generated_tensor_to_base64_png(image) for image in images]
+
+
+def generate_fashion_interpolation(
+    checkpoint_path: str | Path = DEFAULT_CVAE_CHECKPOINT,
+    start_label: int = 7,
+    end_label: int = 9,
+    steps: int = 8,
+    device: torch.device | str | None = None,
+    seed: int | None = 42,
+) -> dict[str, Any]:
+    """Load the cached CVAE and return one base64-encoded latent path."""
+
+    model, checkpoint, resolved_device = get_cached_fashion_cvae(
+        checkpoint_path=checkpoint_path,
+        device=device,
+    )
+    class_names = list(checkpoint.get("class_names", FASHION_MNIST_CLASSES))
+    if not 0 <= start_label < len(class_names):
+        raise ValueError(f"start_label must be between 0 and {len(class_names) - 1}.")
+    if not 0 <= end_label < len(class_names):
+        raise ValueError(f"end_label must be between 0 and {len(class_names) - 1}.")
+
+    images, label_schedule, alphas = sample_fashion_latent_interpolation(
+        model=model,
+        start_label=start_label,
+        end_label=end_label,
+        steps=steps,
+        device=resolved_device,
+        seed=seed,
+    )
+    return {
+        "start_class_index": start_label,
+        "start_label": class_names[start_label],
+        "end_class_index": end_label,
+        "end_label": class_names[end_label],
+        "steps": steps,
+        "seed": seed,
+        "label_schedule": [class_names[index] for index in label_schedule],
+        "alphas": [float(alpha) for alpha in alphas],
+        "image_format": "png",
+        "images_base64": interpolation_tensors_to_base64(images),
+        "model_name": "ConditionalVAE",
+        "device": str(resolved_device),
+    }

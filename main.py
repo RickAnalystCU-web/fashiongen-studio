@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from helper_lib.fashion_data import FASHION_MNIST_CLASSES
 from helper_lib.fashion_generator import (
     classify_fashion_tensors,
+    generate_fashion_interpolation,
     generated_tensor_to_base64_png,
     get_cached_fashion_classifier,
     get_cached_fashion_cvae,
@@ -32,7 +33,7 @@ app = FastAPI(
         "Generate class-conditioned Fashion-MNIST images with a Conditional VAE "
         "and evaluate images with a CNN quality checker."
     ),
-    version="0.2.0",
+    version="0.3.0",
 )
 
 
@@ -45,6 +46,23 @@ class FashionGenerationRequest(BaseModel):
         examples=["sneaker"],
     )
     num_images: int = Field(default=4, ge=1, le=MAX_GENERATED_IMAGES)
+    seed: int | None = Field(default=42)
+
+
+class FashionInterpolationRequest(BaseModel):
+    """Request body for a seeded CVAE latent interpolation path."""
+
+    start_label: int | str = Field(
+        ...,
+        description="Starting Fashion-MNIST class index or name.",
+        examples=["sneaker"],
+    )
+    end_label: int | str = Field(
+        ...,
+        description="Ending Fashion-MNIST class index or name.",
+        examples=["ankle boot"],
+    )
+    steps: int = Field(default=8, ge=2, le=32)
     seed: int | None = Field(default=42)
 
 
@@ -143,6 +161,7 @@ def project_info() -> dict[str, Any]:
         "endpoints": [
             "/fashion/classes",
             "/fashion/generate",
+            "/fashion/interpolate",
             "/fashion/analyze",
             "/fashion/generate-and-check",
         ],
@@ -189,6 +208,41 @@ def generate_fashion(request: FashionGenerationRequest) -> dict[str, Any]:
             generated_tensor_to_base64_png(image) for image in images
         ],
     }
+
+
+@app.post("/fashion/interpolate")
+def interpolate_fashion(
+    request: FashionInterpolationRequest,
+) -> dict[str, Any]:
+    """Generate a seeded linear path through the CVAE latent space."""
+
+    start_index, _ = _resolve_fashion_label(request.start_label)
+    end_index, _ = _resolve_fashion_label(request.end_label)
+    try:
+        result = generate_fashion_interpolation(
+            checkpoint_path=CVAE_CHECKPOINT_PATH,
+            start_label=start_index,
+            end_label=end_index,
+            steps=request.steps,
+            seed=request.seed,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"CVAE checkpoint not found at "
+                f"{_relative_checkpoint_path(CVAE_CHECKPOINT_PATH)}. "
+                "Train it with: python train_fashion_cvae.py"
+            ),
+        ) from exc
+    except (KeyError, RuntimeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"CVAE interpolation failed: {exc}",
+        ) from exc
+
+    result["checkpoint_path"] = _relative_checkpoint_path(CVAE_CHECKPOINT_PATH)
+    return result
 
 
 @app.post("/fashion/analyze")
