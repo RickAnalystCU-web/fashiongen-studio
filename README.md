@@ -48,6 +48,24 @@ Training options include `--epochs`, `--batch-size`, `--lr`, `--latent-dim`, and
 
 Standalone helpers in `helper_lib/fashion_generator.py` can load the checkpoint, sample requested classes, and encode generated grayscale images as base64 PNGs. These helpers support the FastAPI generation and generation-with-quality-check endpoints.
 
+## Experimental Diffusion Extension
+
+The optional conditional diffusion extension uses a compact UNet-like denoiser to predict Gaussian noise from a noisy 28 x 28 Fashion-MNIST image. Sinusoidal timestep embeddings and learned class embeddings condition the reverse process. This is a stretch-goal experiment; the trained CVAE remains FashionGen Studio's main productionized generator and the model used by FastAPI.
+
+Run the conservative one-epoch CUDA smoke experiment with:
+
+```bash
+py -3.11 -m uv run python train_fashion_diffusion.py --epochs 1 --batch-size 128 --timesteps 100 --base-channels 32 --num-workers 0
+```
+
+The run creates:
+
+- `checkpoints/fashion_diffusion.pth` — experimental denoiser weights, configuration, loss history, runtime, and device metadata.
+- `generated_samples/diffusion_samples_grid.png` — one early sample for each Fashion-MNIST class.
+- `generated_samples/diffusion_summary.md` — the one-epoch configuration, final loss, GPU memory, and interpretation.
+
+One epoch verifies the GPU training and reverse-sampling pipeline but is not expected to produce converged images. The resulting grid is intended for a qualitative comparison with the CVAE, not as a replacement for the existing API workflow.
+
 ## API endpoints
 
 Interactive Swagger documentation is available at `http://localhost:8000/docs`. Model checkpoints are loaded lazily, so the API can start without them; a model-backed endpoint returns a helpful error if its required checkpoint is missing.
@@ -204,12 +222,14 @@ fashiongen-studio/
 |   |-- fashion_data.py
 |   |-- fashion_classifier.py
 |   |-- fashion_cvae.py
+|   |-- fashion_diffusion.py
 |   |-- fashion_generator.py
 |   |-- trainer.py
 |   |-- evaluator.py
 |   `-- utils.py
 |-- train_fashion_classifier.py
 |-- train_fashion_cvae.py
+|-- train_fashion_diffusion.py
 |-- checkpoints/
 |-- generated_samples/
 |-- report/
