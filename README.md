@@ -58,11 +58,13 @@ Run the conservative one-epoch CUDA smoke experiment with:
 py -3.11 -m uv run python train_fashion_diffusion.py --epochs 1 --batch-size 128 --timesteps 100 --base-channels 32 --num-workers 0
 ```
 
-The run creates:
+The default output names include the requested epoch count, so 1-, 5-, and 10-epoch experiments can coexist. For a ten-epoch run, the script creates:
 
-- `checkpoints/fashion_diffusion.pth` — experimental denoiser weights, configuration, loss history, runtime, and device metadata.
-- `generated_samples/diffusion_samples_grid.png` — one early sample for each Fashion-MNIST class.
-- `generated_samples/diffusion_summary.md` — the one-epoch configuration, final loss, GPU memory, and interpretation.
+- `checkpoints/fashion_diffusion_10ep.pth` — experimental denoiser weights, configuration, loss history, runtime, and device metadata.
+- `generated_samples/diffusion_samples_grid_10ep.png` — one sample for each Fashion-MNIST class.
+- `generated_samples/diffusion_summary_10ep.md` — configuration, final loss, GPU memory, and an epoch-aware interpretation.
+
+Use `--checkpoint-path`, `--sample-path`, and `--summary-path` to override any of these paths explicitly.
 
 One epoch verifies the GPU training and reverse-sampling pipeline but is not expected to produce converged images. The resulting grid is intended for a qualitative comparison with the CVAE, not as a replacement for the existing API workflow.
 

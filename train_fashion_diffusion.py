@@ -46,14 +46,51 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data-dir", default="data")
     parser.add_argument(
         "--checkpoint-path",
-        default="checkpoints/fashion_diffusion.pth",
+        default=None,
+        help="Custom checkpoint path; defaults to an epoch-specific filename.",
     )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--sample-path",
-        default="generated_samples/diffusion_samples_grid.png",
+        default=None,
+        help="Custom sample-grid path; defaults to an epoch-specific filename.",
+    )
+    parser.add_argument(
+        "--summary-path",
+        default=None,
+        help="Custom Markdown path; defaults to an epoch-specific filename.",
     )
     return parser.parse_args()
+
+
+def resolve_output_paths(
+    epochs: int,
+    checkpoint_path: str | Path | None = None,
+    sample_path: str | Path | None = None,
+    summary_path: str | Path | None = None,
+) -> tuple[Path, Path, Path]:
+    """Resolve custom paths or create non-overwriting epoch-specific defaults."""
+
+    if epochs <= 0:
+        raise ValueError("epochs must be positive.")
+    epoch_suffix = f"{epochs}ep"
+    resolved_checkpoint = (
+        Path(checkpoint_path)
+        if checkpoint_path is not None
+        else Path("checkpoints") / f"fashion_diffusion_{epoch_suffix}.pth"
+    )
+    resolved_sample = (
+        Path(sample_path)
+        if sample_path is not None
+        else Path("generated_samples")
+        / f"diffusion_samples_grid_{epoch_suffix}.png"
+    )
+    resolved_summary = (
+        Path(summary_path)
+        if summary_path is not None
+        else Path("generated_samples") / f"diffusion_summary_{epoch_suffix}.md"
+    )
+    return resolved_checkpoint, resolved_sample, resolved_summary
 
 
 def _load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
@@ -70,7 +107,11 @@ def _load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def save_sample_grid(images: torch.Tensor, output_path: Path) -> None:
+def save_sample_grid(
+    images: torch.Tensor,
+    output_path: Path,
+    epochs: int,
+) -> None:
     """Save one labeled row containing all ten Fashion-MNIST classes."""
 
     cell_width = 128
@@ -88,7 +129,7 @@ def save_sample_grid(images: torch.Tensor, output_path: Path) -> None:
     draw = ImageDraw.Draw(canvas)
     title_font = _load_font(30, bold=True)
     label_font = _load_font(15, bold=True)
-    title = "FashionGen: 1-Epoch Conditional Diffusion Samples"
+    title = f"FashionGen: {epochs}-Epoch Conditional Diffusion Samples"
     title_box = draw.textbbox((0, 0), title, font=title_font)
     title_x = max((canvas.width - (title_box[2] - title_box[0])) // 2, 0)
     draw.text((title_x, 25), title, fill="#111827", font=title_font)
@@ -127,7 +168,7 @@ def save_training_summary(
     device: torch.device,
     peak_gpu_memory_mb: float | None,
 ) -> None:
-    """Write a report-ready description of the one-epoch experiment."""
+    """Write a report-ready description matching the completed epoch count."""
 
     device_description = (
         torch.cuda.get_device_name(0) if device.type == "cuda" else "CPU"
@@ -137,11 +178,30 @@ def save_training_summary(
         if peak_gpu_memory_mb is not None
         else "- Peak allocated GPU memory: not applicable"
     )
+    if args.epochs == 1:
+        run_description = "a deliberately limited one-epoch smoke test"
+        interpretation = (
+            "Only one epoch was used to verify the conditional diffusion pipeline on "
+            "GPU. The samples are an early qualitative baseline, not a converged "
+            "result. Visible noise, weak silhouettes, or limited class separation "
+            "are expected at this stage."
+        )
+    else:
+        run_description = (
+            f"a short experimental diffusion training run of {args.epochs} epochs"
+        )
+        interpretation = (
+            f"This {args.epochs}-epoch run explores whether additional training "
+            "improves image structure and class conditioning beyond the smoke test. "
+            "The samples remain an experimental comparison with the CVAE rather than "
+            "a replacement for the productionized generator."
+        )
+
     lines = [
         "# Experimental Fashion-MNIST Diffusion Summary",
         "",
-        "This artifact records a deliberately limited one-epoch smoke training run. "
-        "The Conditional VAE remains FashionGen Studio's main productionized generator.",
+        f"This artifact records {run_description}. The Conditional VAE remains "
+        "FashionGen Studio's main productionized generator.",
         "",
         "## Configuration and results",
         "",
@@ -160,11 +220,9 @@ def save_training_summary(
         "",
         "## Interpretation",
         "",
-        "Only one epoch was used to verify the conditional diffusion pipeline on GPU. "
-        "The samples are an early qualitative baseline, not a converged result. Visible "
-        "noise, weak silhouettes, or limited class separation are expected at this stage. "
-        "Longer training should be considered only if this stretch goal adds value beyond "
-        "the completed CVAE workflow.",
+        interpretation,
+        "Longer training should be considered only if this stretch goal adds value "
+        "beyond the completed CVAE workflow.",
         "",
     ]
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -183,6 +241,13 @@ def main() -> None:
         raise ValueError("--base-channels must be at least 8 and divisible by 8.")
     if args.num_workers < 0:
         raise ValueError("--num-workers cannot be negative.")
+
+    checkpoint_path, sample_path, summary_path = resolve_output_paths(
+        epochs=args.epochs,
+        checkpoint_path=args.checkpoint_path,
+        sample_path=args.sample_path,
+        summary_path=args.summary_path,
+    )
 
     set_seed(args.seed)
     device = get_device()
@@ -260,6 +325,14 @@ def main() -> None:
         else None
     )
 
+    training_args = vars(args).copy()
+    training_args.update(
+        {
+            "checkpoint_path": str(checkpoint_path),
+            "sample_path": str(sample_path),
+            "summary_path": str(summary_path),
+        }
+    )
     checkpoint_path = save_checkpoint(
         {
             "model_state_dict": model.state_dict(),
@@ -268,13 +341,13 @@ def main() -> None:
             "base_channels": args.base_channels,
             "schedule": "cosine",
             "training_history": history,
-            "training_args": vars(args).copy(),
+            "training_args": training_args,
             "training_seconds": training_seconds,
             "final_train_loss": final_loss,
             "device": str(device),
             "peak_gpu_memory_mb": peak_gpu_memory_mb,
         },
-        args.checkpoint_path,
+        checkpoint_path,
     )
 
     samples = generate_diffusion_samples(
@@ -284,9 +357,7 @@ def main() -> None:
         device=device,
         seed=args.seed,
     )
-    sample_path = Path(args.sample_path)
-    save_sample_grid(samples, sample_path)
-    summary_path = sample_path.with_name("diffusion_summary.md")
+    save_sample_grid(samples, sample_path, epochs=args.epochs)
     save_training_summary(
         output_path=summary_path,
         checkpoint_path=Path(checkpoint_path),
