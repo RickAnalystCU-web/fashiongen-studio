@@ -16,6 +16,24 @@ Raw and downloaded data belongs under `data/`, which is intentionally ignored by
 - A class-conditional VAE with label conditioning in the encoder and decoder.
 - An evaluation workflow that compares the requested class with the CNN's prediction for each generated sample.
 
+## Fashion-MNIST CNN quality checker
+
+The CNN classifier provides an independent quality signal for generated images. It predicts one of the ten Fashion-MNIST classes from a 28 x 28 grayscale image and reports class accuracy metrics. In a later project step, it will evaluate CVAE samples returned by the planned `POST /fashion/generate-and-check` endpoint.
+
+Train the classifier with the default five-epoch configuration:
+
+```bash
+uv run python train_fashion_classifier.py
+```
+
+For a short pipeline smoke test, use one epoch:
+
+```bash
+uv run python train_fashion_classifier.py --epochs 1
+```
+
+The default checkpoint is written to `checkpoints/fashion_classifier.pth`. It contains the model state, class names, test metrics, training arguments, and training history. Checkpoints and downloaded Fashion-MNIST data are ignored by Git and should not be committed.
+
 ## API endpoints
 
 Available in the scaffold:
@@ -95,4 +113,3 @@ fashiongen-studio/
 |-- Dockerfile
 `-- docker-compose.yml
 ```
-
