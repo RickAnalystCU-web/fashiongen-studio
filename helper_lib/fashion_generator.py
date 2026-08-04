@@ -1,18 +1,34 @@
-﻿"""Checkpoint loading and class-conditioned Fashion-MNIST generation helpers."""
+﻿"""Lazy model loading, inference, and Fashion-MNIST image generation helpers."""
 
 from collections.abc import Sequence
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import torch
 from PIL import Image
+from torchvision import transforms
 
+from helper_lib.fashion_classifier import (
+    FashionClassifier,
+    get_fashion_classifier,
+)
 from helper_lib.fashion_cvae import ConditionalVAE, get_fashion_cvae
 from helper_lib.fashion_data import FASHION_MNIST_CLASSES
 from helper_lib.utils import get_device, image_to_base64_png, load_checkpoint
 
 
 DEFAULT_CVAE_CHECKPOINT = Path("checkpoints") / "fashion_cvae.pth"
+DEFAULT_CLASSIFIER_CHECKPOINT = Path("checkpoints") / "fashion_classifier.pth"
+
+FASHION_CLASSIFIER_TRANSFORM = transforms.Compose(
+    [
+        transforms.Grayscale(num_output_channels=1),
+        transforms.Resize((28, 28)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,)),
+    ]
+)
 
 
 def load_fashion_cvae_checkpoint(
@@ -26,7 +42,7 @@ def load_fashion_cvae_checkpoint(
     if "model_state_dict" not in checkpoint:
         raise KeyError("CVAE checkpoint is missing model_state_dict.")
 
-    class_names = checkpoint.get("class_names", FASHION_MNIST_CLASSES)
+    class_names = list(checkpoint.get("class_names", FASHION_MNIST_CLASSES))
     latent_dim = int(checkpoint.get("latent_dim", 32))
     model = get_fashion_cvae(
         latent_dim=latent_dim,
@@ -36,6 +52,132 @@ def load_fashion_cvae_checkpoint(
     model.to(resolved_device)
     model.eval()
     return model, checkpoint, resolved_device
+
+
+@lru_cache(maxsize=4)
+def _cached_cvae_loader(
+    checkpoint_path: str,
+    device: str,
+) -> tuple[ConditionalVAE, dict[str, Any], torch.device]:
+    return load_fashion_cvae_checkpoint(checkpoint_path, device=device)
+
+
+def get_cached_fashion_cvae(
+    checkpoint_path: str | Path = DEFAULT_CVAE_CHECKPOINT,
+    device: torch.device | str | None = None,
+) -> tuple[ConditionalVAE, dict[str, Any], torch.device]:
+    """Load the CVAE once per resolved checkpoint path and device."""
+
+    resolved_path = str(Path(checkpoint_path).resolve())
+    resolved_device = str(torch.device(device) if device is not None else get_device())
+    return _cached_cvae_loader(resolved_path, resolved_device)
+
+
+def load_fashion_classifier_checkpoint(
+    checkpoint_path: str | Path = DEFAULT_CLASSIFIER_CHECKPOINT,
+    device: torch.device | str | None = None,
+) -> tuple[FashionClassifier, dict[str, Any], torch.device]:
+    """Load the trained Fashion-MNIST classifier and its metadata."""
+
+    resolved_device = torch.device(device) if device is not None else get_device()
+    checkpoint = load_checkpoint(checkpoint_path, device=resolved_device)
+    if "model_state_dict" not in checkpoint:
+        raise KeyError("Classifier checkpoint is missing model_state_dict.")
+
+    class_names = list(checkpoint.get("class_names", FASHION_MNIST_CLASSES))
+    model = get_fashion_classifier(num_classes=len(class_names))
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.to(resolved_device)
+    model.eval()
+    return model, checkpoint, resolved_device
+
+
+@lru_cache(maxsize=4)
+def _cached_classifier_loader(
+    checkpoint_path: str,
+    device: str,
+) -> tuple[FashionClassifier, dict[str, Any], torch.device]:
+    return load_fashion_classifier_checkpoint(checkpoint_path, device=device)
+
+
+def get_cached_fashion_classifier(
+    checkpoint_path: str | Path = DEFAULT_CLASSIFIER_CHECKPOINT,
+    device: torch.device | str | None = None,
+) -> tuple[FashionClassifier, dict[str, Any], torch.device]:
+    """Load the classifier once per resolved checkpoint path and device."""
+
+    resolved_path = str(Path(checkpoint_path).resolve())
+    resolved_device = str(torch.device(device) if device is not None else get_device())
+    return _cached_classifier_loader(resolved_path, resolved_device)
+
+
+def clear_model_caches() -> None:
+    """Clear lazy model caches, primarily for tests or replaced checkpoints."""
+
+    _cached_cvae_loader.cache_clear()
+    _cached_classifier_loader.cache_clear()
+
+
+def preprocess_fashion_image(image: Image.Image) -> torch.Tensor:
+    """Convert an uploaded image into a normalized [1, 28, 28] tensor."""
+
+    return FASHION_CLASSIFIER_TRANSFORM(image.convert("L"))
+
+
+def classify_fashion_tensors(
+    model: FashionClassifier,
+    images: torch.Tensor,
+    class_names: Sequence[str] = FASHION_MNIST_CLASSES,
+    device: torch.device | str | None = None,
+    top_k: int = 3,
+) -> list[dict[str, Any]]:
+    """Classify normalized Fashion-MNIST tensors and return ranked predictions."""
+
+    if images.ndim == 3:
+        images = images.unsqueeze(0)
+    if images.ndim != 4 or tuple(images.shape[1:]) != (1, 28, 28):
+        raise ValueError(
+            "images must have shape [batch, 1, 28, 28], "
+            f"got {tuple(images.shape)}."
+        )
+    if len(class_names) == 0:
+        raise ValueError("class_names cannot be empty.")
+
+    resolved_device = torch.device(device) if device is not None else next(
+        model.parameters()
+    ).device
+    model.to(resolved_device)
+    model.eval()
+    with torch.no_grad():
+        logits = model(images.to(resolved_device))
+        probabilities = torch.softmax(logits, dim=1)
+
+    ranked_count = min(max(top_k, 1), probabilities.size(1))
+    top_probabilities, top_indices = probabilities.topk(ranked_count, dim=1)
+    results: list[dict[str, Any]] = []
+    for row in range(probabilities.size(0)):
+        predicted_index = int(top_indices[row, 0].item())
+        top_predictions = [
+            {
+                "label": class_names[int(index.item())],
+                "class_index": int(index.item()),
+                "confidence": float(probability.item()),
+            }
+            for probability, index in zip(
+                top_probabilities[row],
+                top_indices[row],
+                strict=True,
+            )
+        ]
+        results.append(
+            {
+                "predicted_label": class_names[predicted_index],
+                "predicted_class_index": predicted_index,
+                "confidence": float(top_probabilities[row, 0].item()),
+                "top_3": top_predictions,
+            }
+        )
+    return results
 
 
 def sample_fashion_images(
@@ -103,12 +245,12 @@ def generate_fashion_images(
     device: torch.device | str | None = None,
     seed: int | None = None,
 ) -> dict[str, Any]:
-    """Load a CVAE and generate base64 PNGs for one requested class."""
+    """Load a cached CVAE and generate base64 PNGs for one requested class."""
 
     if num_images <= 0:
         raise ValueError("num_images must be positive.")
 
-    model, checkpoint, resolved_device = load_fashion_cvae_checkpoint(
+    model, checkpoint, resolved_device = get_cached_fashion_cvae(
         checkpoint_path=checkpoint_path,
         device=device,
     )

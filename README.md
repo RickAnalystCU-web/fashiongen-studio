@@ -1,16 +1,16 @@
 ﻿# FashionGen Studio
 
-FashionGen Studio is the APAN 5560 final group project. It will generate one or more 28 x 28 grayscale fashion images for a requested category with a Conditional Variational Autoencoder (CVAE), then use a separate CNN classifier to check whether the generated image resembles the requested class. A FastAPI service will expose the workflow and return generated images as base64-encoded PNGs.
+FashionGen Studio is the APAN 5560 final group project. It generates one or more 28 x 28 grayscale fashion images for a requested category with a Conditional Variational Autoencoder (CVAE), then uses a separate CNN classifier to check whether each generated image resembles the requested class. A FastAPI service exposes the workflow and returns generated images as base64-encoded PNGs.
 
-This repository currently contains the project scaffold only. Models have not been implemented or trained, and no dataset or checkpoint is included.
+The repository includes trained-model pipelines and user-facing FastAPI endpoints. Raw data and trained checkpoints remain local and are intentionally excluded from Git.
 
 ## Dataset
 
 The project uses Fashion-MNIST through `torchvision.datasets.FashionMNIST`. Fashion-MNIST contains ten categories: T-shirt/top, Trouser, Pullover, Dress, Coat, Sandal, Shirt, Sneaker, Bag, and Ankle boot.
 
-Raw and downloaded data belongs under `data/`, which is intentionally ignored by Git. Dataset downloading will be added to the training workflow rather than performed during API startup.
+Raw and downloaded data belongs under `data/`, which is intentionally ignored by Git. The training scripts download Fashion-MNIST on demand; API startup never downloads the dataset.
 
-## Planned models
+## Models
 
 - A CNN classifier trained on Fashion-MNIST as an independent class and confidence quality checker.
 - A class-conditional VAE with label conditioning in the encoder and decoder.
@@ -18,7 +18,7 @@ Raw and downloaded data belongs under `data/`, which is intentionally ignored by
 
 ## Fashion-MNIST CNN quality checker
 
-The CNN classifier provides an independent quality signal for generated images. It predicts one of the ten Fashion-MNIST classes from a 28 x 28 grayscale image and reports class accuracy metrics. In a later project step, it will evaluate CVAE samples returned by the planned `POST /fashion/generate-and-check` endpoint.
+The CNN classifier provides an independent quality signal for generated images. It predicts one of the ten Fashion-MNIST classes from a 28 x 28 grayscale image and reports class accuracy metrics. It also evaluates CVAE samples returned by the implemented `POST /fashion/generate-and-check` endpoint.
 
 Train the classifier with the default five-epoch configuration:
 
@@ -46,25 +46,66 @@ uv run python train_fashion_cvae.py
 
 Training options include `--epochs`, `--batch-size`, `--lr`, `--latent-dim`, and `--beta`. The default checkpoint is written to `checkpoints/fashion_cvae.pth` and remains ignored by Git.
 
-Standalone helpers in `helper_lib/fashion_generator.py` can load the checkpoint, sample requested classes, and encode generated grayscale images as base64 PNGs. These helpers will later support a FastAPI fashion-generation endpoint; no generation endpoint is implemented yet.
+Standalone helpers in `helper_lib/fashion_generator.py` can load the checkpoint, sample requested classes, and encode generated grayscale images as base64 PNGs. These helpers support the FastAPI generation and generation-with-quality-check endpoints.
 
 ## API endpoints
 
-Available in the scaffold:
+Interactive Swagger documentation is available at `http://localhost:8000/docs`. Model checkpoints are loaded lazily, so the API can start without them; a model-backed endpoint returns a helpful error if its required checkpoint is missing.
 
-- `GET /` returns project metadata and implementation status.
-- `GET /fashion/classes` returns the canonical Fashion-MNIST class names.
+Required local checkpoints:
 
-Planned model-backed endpoints:
+- `checkpoints/fashion_classifier.pth`
+- `checkpoints/fashion_cvae.pth`
 
-- `POST /fashion/generate` will generate one or more images for a requested class and return base64 PNG data.
-- `POST /fashion/quality-check` will classify an image and return the predicted class and confidence.
-- `GET /health` will report API and checkpoint readiness.
+Recreate them with:
 
-Interactive API documentation is available at `/docs` while the app is running.
+```bash
+uv run python train_fashion_classifier.py
+uv run python train_fashion_cvae.py
+```
+
+### `GET /`
+
+Returns project metadata and the available user-facing routes.
+
+### `GET /fashion/classes`
+
+Returns all ten Fashion-MNIST classes with their numeric indices and canonical names.
+
+### `POST /fashion/generate`
+
+Generates 1 to 16 class-conditioned images and returns base64-encoded PNG strings. `label` accepts a class name or index.
+
+```json
+{
+  "label": "sneaker",
+  "num_images": 4,
+  "seed": 42
+}
+```
+
+### `POST /fashion/analyze`
+
+Accepts an uploaded image as multipart form data. The service converts it to grayscale, resizes it to 28 x 28, applies Fashion-MNIST normalization, and returns the CNN prediction, confidence, and top-three classes.
+
+```bash
+curl -X POST "http://localhost:8000/fashion/analyze" \
+  -F "file=@generated_sample.png"
+```
+
+### `POST /fashion/generate-and-check`
+
+Generates images with the CVAE and immediately classifies each normalized tensor with the CNN. Each result includes the PNG, requested and predicted labels, confidence, and a pass/fail quality flag. The summary includes the number passed and pass rate.
+
+```json
+{
+  "label": "bag",
+  "num_images": 4,
+  "seed": 42
+}
+```
 
 ## Local development
-
 Python 3.11 or newer and [uv](https://docs.astral.sh/uv/) are recommended.
 
 ```bash
@@ -99,7 +140,7 @@ The API will be available at `http://localhost:8000`.
 
 ## Data, checkpoints, and generated output
 
-- Do not commit `data/`; Fashion-MNIST should be downloaded locally by the future data-loading code.
+- Do not commit `data/`; Fashion-MNIST is downloaded locally by the training scripts.
 - Do not commit trained weights (`*.pt`, `*.pth`, `*.ckpt`, or `*.onnx`). Keep local checkpoints under `checkpoints/` or use external artifact storage.
 - `generated_samples/` is for local qualitative evaluation and is ignored except for its placeholder file.
 - Never bake raw data or large model artifacts into the Docker image or Git history.
