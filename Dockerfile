@@ -2,10 +2,10 @@
 
 WORKDIR /app
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.md ./
 
 RUN pip install --no-cache-dir uv \
-    && uv sync --no-dev
+    && uv sync --frozen --no-dev
 
 COPY . .
 
